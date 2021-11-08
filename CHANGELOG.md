@@ -2,10 +2,25 @@
 
 ## [Unreleased]
 
+- Update to support axum 0.2
+  [#303](https://github.com/lambda-fairy/maud/pull/303)
+- Add support for `Option<T>` attributes using the `attr=[value]` syntax.
+  [#306](https://github.com/lambda-fairy/maud/pull/306)
+- Update to Rust 2021
+  [#309](https://github.com/lambda-fairy/maud/pull/309)
+- Remove Iron support
+  [#289](https://github.com/lambda-fairy/maud/pull/289)
+- Disallow slashes (`/`) in void elements
+  [#315](https://github.com/lambda-fairy/maud/pull/315)
+
+## [0.22.3] - 2021-09-27
+
 - Support `no_std` + `alloc`.
   [#278](https://github.com/lambda-fairy/maud/issues/278)
 - Provide Tide support.
   [#280](https://github.com/lambda-fairy/maud/pull/280) 
+- Provide Axum support.
+  [#284](https://github.com/lambda-fairy/maud/pull/284)
 
 ## [0.22.2] - 2021-01-09
 
@@ -251,7 +266,8 @@
 - Update to latest syntax extension API
 
 
-[Unreleased]: https://github.com/lambda-fairy/maud/compare/v0.22.2...HEAD
+[Unreleased]: https://github.com/lambda-fairy/maud/compare/v0.22.3...HEAD
+[0.22.3]: https://github.com/lambda-fairy/maud/compare/v0.22.2...v0.22.3
 [0.22.2]: https://github.com/lambda-fairy/maud/compare/v0.22.1...v0.22.2
 [0.22.1]: https://github.com/lambda-fairy/maud/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/lambda-fairy/maud/compare/v0.21.0...v0.22.0

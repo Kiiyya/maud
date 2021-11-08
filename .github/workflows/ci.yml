@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-    - master
+    - main
   schedule:
   - cron: '0 1 * * *'
 
@@ -74,7 +74,7 @@ jobs:
         override: true
 
     - name: Doctest
-      run: cd doctest && cargo test
+      run: cd doctest && cargo check
 
   rustfmt:
     name: Rustfmt
@@ -88,9 +88,8 @@ jobs:
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
-        # rustfmt is often missing on nightly. Since there's little benefit to
-        # using the nightly version, use the more reliable stable build instead.
-        toolchain: stable
+        # Nightly rustfmt is needed for the `imports_granularity` option
+        toolchain: nightly
         profile: minimal
         override: true
         components: rustfmt

@@ -538,11 +538,19 @@ impl Parser {
             {
                 // Void element
                 self.advance();
+                if punct.as_char() == '/' {
+                    emit_error!(
+                        punct,
+                        "void elements must use `;`, not `/`";
+                        help = "change this to `;`";
+                        help = "see https://github.com/lambda-fairy/maud/pull/315 for details";
+                    );
+                }
                 ast::ElementBody::Void {
                     semi_span: SpanRange::single_span(punct.span()),
                 }
             }
-            _ => match self.markup() {
+            Some(_) => match self.markup() {
                 ast::Markup::Block(block) => ast::ElementBody::Block { block },
                 markup => {
                     let markup_span = markup.span();
@@ -553,6 +561,7 @@ impl Parser {
                     );
                 }
             },
+            None => abort_call_site!("expected `;`, found end of macro"),
         };
         ast::Markup::Element { name, attrs, body }
     }
@@ -570,21 +579,24 @@ impl Parser {
                         // Parse a value under an attribute context
                         assert!(self.current_attr.is_none());
                         self.current_attr = Some(ast::name_to_string(name.clone()));
-                        let value = self.markup();
+                        let attr_type = match self.attr_toggler() {
+                            Some(toggler) => ast::AttrType::Optional { toggler },
+                            None => {
+                                let value = self.markup();
+                                ast::AttrType::Normal { value }
+                            }
+                        };
                         self.current_attr = None;
-                        attrs.push(ast::Attr::Attribute {
-                            attribute: ast::Attribute {
-                                name,
-                                attr_type: ast::AttrType::Normal { value },
-                            },
+                        attrs.push(ast::Attr::Named {
+                            named_attr: ast::NamedAttr { name, attr_type },
                         });
                     }
                     // Empty attribute (legacy syntax)
                     Some(TokenTree::Punct(ref punct)) if punct.as_char() == '?' => {
                         self.advance();
                         let toggler = self.attr_toggler();
-                        attrs.push(ast::Attr::Attribute {
-                            attribute: ast::Attribute {
+                        attrs.push(ast::Attr::Named {
+                            named_attr: ast::NamedAttr {
                                 name: name.clone(),
                                 attr_type: ast::AttrType::Empty { toggler },
                             },
@@ -593,8 +605,8 @@ impl Parser {
                     // Empty attribute (new syntax)
                     _ => {
                         let toggler = self.attr_toggler();
-                        attrs.push(ast::Attr::Attribute {
-                            attribute: ast::Attribute {
+                        attrs.push(ast::Attr::Named {
+                            named_attr: ast::NamedAttr {
                                 name: name.clone(),
                                 attr_type: ast::AttrType::Empty { toggler },
                             },
@@ -642,7 +654,7 @@ impl Parser {
                     "class".to_string()
                 }
                 ast::Attr::Id { .. } => "id".to_string(),
-                ast::Attr::Attribute { attribute } => attribute
+                ast::Attr::Named { named_attr } => named_attr
                     .name
                     .clone()
                     .into_iter()

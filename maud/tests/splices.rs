@@ -54,7 +54,7 @@ fn class_shorthand_block() {
 #[test]
 fn id_shorthand() {
     let pinkie_id = "pinkie";
-    let result = html! { p#(pinkie_id) { "Fun!" } };
+    let result = html! { p #(pinkie_id) { "Fun!" } };
     assert_eq!(result.into_string(), r#"<p id="pinkie">Fun!</p>"#);
 }
 

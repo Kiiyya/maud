@@ -85,7 +85,7 @@ let name = "rarity";
 let severity = "critical";
 # let _ = maud::
 html! {
-    aside#(name) {
+    aside #(name) {
         p.{ "color-" (severity) } { "This is the worst! Possible! Thing!" }
     }
 }

@@ -7,7 +7,7 @@
 //!
 //! [book]: https://maud.lambda.xyz/
 
-#![doc(html_root_url = "https://docs.rs/maud/0.22.2")]
+#![doc(html_root_url = "https://docs.rs/maud/0.22.3")]
 
 extern crate alloc;
 
@@ -15,6 +15,46 @@ use alloc::string::String;
 use core::fmt::{self, Write};
 
 pub use maud_macros::{html, html_debug};
+
+mod escape;
+
+/// An adapter that escapes HTML special characters.
+///
+/// The following characters are escaped:
+///
+/// * `&` is escaped as `&amp;`
+/// * `<` is escaped as `&lt;`
+/// * `>` is escaped as `&gt;`
+/// * `"` is escaped as `&quot;`
+///
+/// All other characters are passed through unchanged.
+///
+/// **Note:** In versions prior to 0.13, the single quote (`'`) was
+/// escaped as well.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use std::fmt::Write;
+/// let mut s = String::new();
+/// write!(Escaper::new(&mut s), "<script>launchMissiles()</script>").unwrap();
+/// assert_eq!(s, "&lt;script&gt;launchMissiles()&lt;/script&gt;");
+/// ```
+pub struct Escaper<'a>(&'a mut String);
+
+impl<'a> Escaper<'a> {
+    /// Creates an `Escaper` from a `String`.
+    pub fn new(buffer: &'a mut String) -> Escaper<'a> {
+        Escaper(buffer)
+    }
+}
+
+impl<'a> fmt::Write for Escaper<'a> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        escape::escape_to_string(s, self.0);
+        Ok(())
+    }
+}
 
 /// Represents a type that can be rendered as HTML.
 ///
@@ -93,10 +133,9 @@ impl<T: fmt::Display + ?Sized> Render for T {
 /// [1]: https://github.com/dtolnay/case-studies/issues/14
 #[doc(hidden)]
 pub mod render {
-    use crate::Render;
+    use crate::{Escaper, Render};
     use alloc::string::String;
     use core::fmt::Write;
-    use maud_htmlescape::Escaper;
 
     pub trait RenderInternal {
         fn __maud_render_to(&self, w: &mut String);
@@ -145,8 +184,6 @@ impl<T: AsRef<str> + Into<String>> From<PreEscaped<T>> for String {
     }
 }
 
-pub use maud_htmlescape::Escaper;
-
 /// The literal string `<!DOCTYPE html>`.
 ///
 /// # Example
@@ -171,43 +208,17 @@ pub use maud_htmlescape::Escaper;
 /// ```
 pub const DOCTYPE: PreEscaped<&'static str> = PreEscaped("<!DOCTYPE html>");
 
-#[cfg(feature = "iron")]
-mod iron_support {
-    extern crate std;
-
-    use crate::PreEscaped;
-    use alloc::boxed::Box;
-    use alloc::string::String;
-    use iron::headers::ContentType;
-    use iron::modifier::{Modifier, Set};
-    use iron::modifiers::Header;
-    use iron::response::{Response, WriteBody};
-    use std::io;
-
-    impl Modifier<Response> for PreEscaped<String> {
-        fn modify(self, response: &mut Response) {
-            response
-                .set_mut(Header(ContentType::html()))
-                .set_mut(Box::new(self) as Box<dyn WriteBody>);
-        }
-    }
-
-    impl WriteBody for PreEscaped<String> {
-        fn write_body(&mut self, body: &mut dyn io::Write) -> io::Result<()> {
-            self.0.write_body(body)
-        }
-    }
-}
-
 #[cfg(feature = "rocket")]
 mod rocket_support {
     extern crate std;
 
     use crate::PreEscaped;
     use alloc::string::String;
-    use rocket::http::{ContentType, Status};
-    use rocket::request::Request;
-    use rocket::response::{Responder, Response};
+    use rocket::{
+        http::{ContentType, Status},
+        request::Request,
+        response::{Responder, Response},
+    };
     use std::io::Cursor;
 
     impl<'r> Responder<'r, 'static> for PreEscaped<String> {
@@ -250,6 +261,32 @@ mod tide_support {
                 .body(markup.into_string())
                 .content_type(mime::HTML)
                 .build()
+        }
+    }
+}
+
+#[cfg(feature = "axum")]
+mod axum_support {
+    use crate::PreEscaped;
+    use alloc::string::String;
+    use axum::{
+        body::Body,
+        http::{header, HeaderValue, Response, StatusCode},
+        response::IntoResponse,
+    };
+
+    impl IntoResponse for PreEscaped<String> {
+        type Body = Body;
+        type BodyError = <Self::Body as axum::body::HttpBody>::Error;
+
+        fn into_response(self) -> Response<Body> {
+            let mut res = Response::new(Body::from(self.0));
+            *res.status_mut() = StatusCode::OK;
+            res.headers_mut().insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("text/html; charset=utf-8"),
+            );
+            res
         }
     }
 }
