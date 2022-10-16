@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Remove blanket `Render` impl for `T: Display`
+  [#320](https://github.com/lambda-fairy/maud/pull/320)
+- Support `axum` v0.5 through `axum-core` v0.2
+  [#325](https://github.com/lambda-fairy/maud/pull/325)
+  [#337](https://github.com/lambda-fairy/maud/pull/337)
+- Update to `actix-web` 4.0.
+  [#331](https://github.com/lambda-fairy/maud/pull/331)
+
+## [0.23.0] - 2021-11-10
+
 - Update to support axum 0.2
   [#303](https://github.com/lambda-fairy/maud/pull/303)
 - Add support for `Option<T>` attributes using the `attr=[value]` syntax.
@@ -18,7 +28,7 @@
 - Support `no_std` + `alloc`.
   [#278](https://github.com/lambda-fairy/maud/issues/278)
 - Provide Tide support.
-  [#280](https://github.com/lambda-fairy/maud/pull/280) 
+  [#280](https://github.com/lambda-fairy/maud/pull/280)
 - Provide Axum support.
   [#284](https://github.com/lambda-fairy/maud/pull/284)
 
@@ -266,7 +276,8 @@
 - Update to latest syntax extension API
 
 
-[Unreleased]: https://github.com/lambda-fairy/maud/compare/v0.22.3...HEAD
+[Unreleased]: https://github.com/lambda-fairy/maud/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/lambda-fairy/maud/compare/v0.23.3...v0.23.0
 [0.22.3]: https://github.com/lambda-fairy/maud/compare/v0.22.2...v0.22.3
 [0.22.2]: https://github.com/lambda-fairy/maud/compare/v0.22.1...v0.22.2
 [0.22.1]: https://github.com/lambda-fairy/maud/compare/v0.22.0...v0.22.1

@@ -7,12 +7,12 @@
 //!
 //! [book]: https://maud.lambda.xyz/
 
-#![doc(html_root_url = "https://docs.rs/maud/0.22.3")]
+#![doc(html_root_url = "https://docs.rs/maud/0.23.0")]
 
 extern crate alloc;
 
-use alloc::string::String;
-use core::fmt::{self, Write};
+use alloc::{borrow::Cow, boxed::Box, string::String};
+use core::fmt::{self, Arguments, Write};
 
 pub use maud_macros::{html, html_debug};
 
@@ -34,7 +34,8 @@ mod escape;
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust
+/// use maud::Escaper;
 /// use std::fmt::Write;
 /// let mut s = String::new();
 /// write!(Escaper::new(&mut s), "<script>launchMissiles()</script>").unwrap();
@@ -58,16 +59,9 @@ impl<'a> fmt::Write for Escaper<'a> {
 
 /// Represents a type that can be rendered as HTML.
 ///
-/// If your type implements [`Display`][1], then it will implement this
-/// trait automatically through a blanket impl.
-///
-/// [1]: https://doc.rust-lang.org/std/fmt/trait.Display.html
-///
-/// On the other hand, if your type has a custom HTML representation,
-/// then you can implement `Render` by hand. To do this, override
-/// either the `.render()` or `.render_to()` methods; since each is
-/// defined in terms of the other, you only need to implement one of
-/// them. See the example below.
+/// To implement this for your own type, override either the `.render()`
+/// or `.render_to()` methods; since each is defined in terms of the
+/// other, you only need to implement one of them. See the example below.
 ///
 /// # Minimal implementation
 ///
@@ -114,46 +108,80 @@ pub trait Render {
     }
 }
 
-impl<T: fmt::Display + ?Sized> Render for T {
+impl Render for str {
     fn render_to(&self, w: &mut String) {
-        let _ = write!(Escaper::new(w), "{}", self);
+        escape::escape_to_string(self, w);
     }
 }
 
-/// Spicy hack to specialize `Render` for `T: AsRef<str>`.
-///
-/// The `std::fmt` machinery is rather heavyweight, both in code size and speed.
-/// It would be nice to skip this overhead for the common cases of `&str` and
-/// `String`. But the obvious solution uses *specialization*, which (as of this
-/// writing) requires Nightly. The [*inherent method specialization*][1] trick
-/// is less clear but works on Stable.
-///
-/// This module is an implementation detail and should not be used directly.
-///
-/// [1]: https://github.com/dtolnay/case-studies/issues/14
-#[doc(hidden)]
-pub mod render {
-    use crate::{Escaper, Render};
-    use alloc::string::String;
-    use core::fmt::Write;
-
-    pub trait RenderInternal {
-        fn __maud_render_to(&self, w: &mut String);
+impl Render for String {
+    fn render_to(&self, w: &mut String) {
+        str::render_to(self, w);
     }
+}
 
-    pub struct RenderWrapper<'a, T: ?Sized>(pub &'a T);
-
-    impl<'a, T: AsRef<str> + ?Sized> RenderWrapper<'a, T> {
-        pub fn __maud_render_to(&self, w: &mut String) {
-            let _ = Escaper::new(w).write_str(self.0.as_ref());
-        }
+impl<'a> Render for Cow<'a, str> {
+    fn render_to(&self, w: &mut String) {
+        str::render_to(self, w);
     }
+}
 
-    impl<'a, T: Render + ?Sized> RenderInternal for RenderWrapper<'a, T> {
-        fn __maud_render_to(&self, w: &mut String) {
-            self.0.render_to(w);
-        }
+impl<'a> Render for Arguments<'a> {
+    fn render_to(&self, w: &mut String) {
+        let _ = Escaper::new(w).write_fmt(*self);
     }
+}
+
+impl<'a, T: Render + ?Sized> Render for &'a T {
+    fn render_to(&self, w: &mut String) {
+        T::render_to(self, w);
+    }
+}
+
+impl<'a, T: Render + ?Sized> Render for &'a mut T {
+    fn render_to(&self, w: &mut String) {
+        T::render_to(self, w);
+    }
+}
+
+impl<T: Render + ?Sized> Render for Box<T> {
+    fn render_to(&self, w: &mut String) {
+        T::render_to(self, w);
+    }
+}
+
+macro_rules! impl_render_with_display {
+    ($($ty:ty)*) => {
+        $(
+            impl Render for $ty {
+                fn render_to(&self, w: &mut String) {
+                    // TODO: remove the explicit arg when Rust 1.58 is released
+                    format_args!("{self}", self = self).render_to(w);
+                }
+            }
+        )*
+    };
+}
+
+impl_render_with_display! {
+    char f32 f64
+}
+
+macro_rules! impl_render_with_itoa {
+    ($($ty:ty)*) => {
+        $(
+            impl Render for $ty {
+                fn render_to(&self, w: &mut String) {
+                    let _ = itoa::fmt(w, *self);
+                }
+            }
+        )*
+    };
+}
+
+impl_render_with_itoa! {
+    i8 i16 i32 i64 i128 isize
+    u8 u16 u32 u64 u128 usize
 }
 
 /// A wrapper that renders the inner value without escaping.
@@ -215,7 +243,7 @@ mod rocket_support {
     use crate::PreEscaped;
     use alloc::string::String;
     use rocket::{
-        http::{ContentType, Status},
+        http::ContentType,
         request::Request,
         response::{Responder, Response},
     };
@@ -234,17 +262,17 @@ mod rocket_support {
 #[cfg(feature = "actix-web")]
 mod actix_support {
     use crate::PreEscaped;
-    use actix_web_dep::{Error, HttpRequest, HttpResponse, Responder};
+    use actix_web_dep::{http::header, HttpRequest, HttpResponse, Responder};
     use alloc::string::String;
-    use futures_util::future::{ok, Ready};
 
     impl Responder for PreEscaped<String> {
-        type Error = Error;
-        type Future = Ready<Result<HttpResponse, Self::Error>>;
-        fn respond_to(self, _req: &HttpRequest) -> Self::Future {
-            ok(HttpResponse::Ok()
-                .content_type("text/html; charset=utf-8")
-                .body(self.0))
+        type Body = String;
+
+        fn respond_to(self, _req: &HttpRequest) -> HttpResponse<Self::Body> {
+            HttpResponse::Ok()
+                .content_type(header::ContentType::html())
+                .message_body(self.0)
+                .unwrap()
         }
     }
 }
@@ -269,24 +297,17 @@ mod tide_support {
 mod axum_support {
     use crate::PreEscaped;
     use alloc::string::String;
-    use axum::{
-        body::Body,
-        http::{header, HeaderValue, Response, StatusCode},
-        response::IntoResponse,
-    };
+    use axum_core::{body::BoxBody, response::IntoResponse};
+    use http::{header, HeaderMap, HeaderValue, Response};
 
     impl IntoResponse for PreEscaped<String> {
-        type Body = Body;
-        type BodyError = <Self::Body as axum::body::HttpBody>::Error;
-
-        fn into_response(self) -> Response<Body> {
-            let mut res = Response::new(Body::from(self.0));
-            *res.status_mut() = StatusCode::OK;
-            res.headers_mut().insert(
+        fn into_response(self) -> Response<BoxBody> {
+            let mut headers = HeaderMap::new();
+            headers.insert(
                 header::CONTENT_TYPE,
                 HeaderValue::from_static("text/html; charset=utf-8"),
             );
-            res
+            (headers, self.0).into_response()
         }
     }
 }
