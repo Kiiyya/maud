@@ -12,6 +12,7 @@
 extern crate alloc;
 
 use alloc::{borrow::Cow, boxed::Box, string::String};
+use bigdecimal::BigDecimal;
 use core::fmt::{self, Arguments, Display, Write};
 
 pub use maud_macros::{html, html_debug};
@@ -147,6 +148,12 @@ impl<'a, T: Render + ?Sized> Render for &'a mut T {
 impl<T: Render + ?Sized> Render for Box<T> {
     fn render_to(&self, w: &mut String) {
         T::render_to(self, w);
+    }
+}
+
+impl Render for BigDecimal {
+    fn render_to(&self, buffer: &mut String) {
+        buffer.push_str(&self.render().into_string());
     }
 }
 
